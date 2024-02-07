@@ -2584,7 +2584,7 @@ Wombat.prototype.rewriteCookie = function(cookie) {
     rwCookie = rwCookie.replace('secure', '');
   }
 
-  return rwCookie.replace(',|', ',');
+  return rwCookie.replace(',|', ',') + "; Secure; SameSite=None; Partitioned";
 };
 
 /**
