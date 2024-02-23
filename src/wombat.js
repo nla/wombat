@@ -1655,7 +1655,9 @@ Wombat.prototype.rewriteNodeFuncArgs = function(
   }
   var created = originalFn.call(fnThis, newNode, oldNode);
   if (created && created.tagName === 'IFRAME') {
-    created.allow = 'autoplay \'self\'; fullscreen \'self\'';
+    const currentAllow = created.allow ? `; ${created.allow}` : '';
+    created.allow = `autoplay 'self'; fullscreen 'self'${currentAllow}`;
+
     this.initIframeWombat(created);
   }
   return created;
@@ -3276,7 +3278,7 @@ Wombat.prototype.overrideDataSet = function() {
 
         var result = target[prop];
 
-        if (wombat.startsWithOneOf(result, wombat.wb_prefixes)) {
+        if (typeof(result) === 'string' && wombat.startsWithOneOf(result, wombat.wb_prefixes)) {
           return wombat.extractOriginalURL(result);
         }
 
@@ -4203,6 +4205,29 @@ Wombat.prototype.initBlobOverride = function() {
   })(this.$wbwindow.Blob);
 
   this.$wbwindow.Blob.prototype = orig_blob.prototype;
+};
+
+Wombat.prototype.initIntersectionObsOverride = function() {
+  var orig_iobs = this.$wbwindow.IntersectionObserver;
+
+  var wombat = this;
+
+  this.$wbwindow.IntersectionObserver = (function(IObs) {
+    return function(callback, options) {
+      if (options && options.root) {
+        options.root = wombat.proxyToObj(options.root);
+      }
+
+      return new IObs(callback, options);
+    };
+
+  })(this.$wbwindow.IntersectionObserver);
+
+  this.$wbwindow.IntersectionObserver.prototype = orig_iobs.prototype;
+
+  Object.defineProperty(this.$wbwindow.IntersectionObserver.prototype, 'constructor', {
+    value: this.$wbwindow.IntersectionObserver
+  });
 };
 
 Wombat.prototype.initWSOverride = function() {
@@ -6665,6 +6690,9 @@ Wombat.prototype.wombatInit = function() {
   // ensure _wombat is inited on the iframe $wbwindow!
   this.overrideIframeContentAccess('contentWindow');
   this.overrideIframeContentAccess('contentDocument');
+
+  // IntersectionObserver constructor override
+  this.initIntersectionObsOverride();
 
   // override funcs to convert first arg proxy->obj
   this.overrideFuncArgProxyToObj(this.$wbwindow.MutationObserver, 'observe');
