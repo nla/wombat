@@ -5324,6 +5324,7 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
   var $wbDocument = this.$wbwindow.document;
 
   this._writeBuff = '';
+  this._docOpenReplacedDocument = false;
 
   var wombat = this;
 
@@ -5410,9 +5411,16 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       res = orig_doc_open.call(thisObj, rwUrl, arguments[1], arguments[2]);
       wombat.initNewWindowWombat(res, arguments[0]);
     } else {
+      const oldDocumentElement = thisObj.documentElement;
       res = orig_doc_open.call(thisObj);
       if (isSWLoad()) {
-        wombat._writeBuff = '';
+        // Track whether the native call replaced the document so close() can
+        // use the blob workaround.
+        wombat._docOpenReplacedDocument =
+          !oldDocumentElement || thisObj.documentElement !== oldDocumentElement;
+        if (wombat._docOpenReplacedDocument) {
+          wombat._writeBuff = '';
+        }
       } else {
         wombat.initNewWindowWombat(thisObj.defaultView);
       }
@@ -5428,14 +5436,30 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
   var originalClose = $wbDocument.close;
   var newClose = function close() {
     if (wombat._writeBuff) {
+      const wasLoading = this.readyState === 'loading';
+      let nativeWriteReplacedDocument = false;
+
       // if loading, apply as may be sync waiting for changes
-      if (this.readyState === 'loading') {
+      if (wasLoading) {
+        const oldDocumentElement = $wbDocument.documentElement;
         orig_doc_write.call(
           $wbDocument,
           wombat.rewriteHtml(wombat._writeBuff, true)
         );
+        nativeWriteReplacedDocument =
+          oldDocumentElement !== null &&
+          $wbDocument.documentElement !== oldDocumentElement;
       }
-      if (isSWLoad()) {
+      // Chromium has an issue where it does not route requests from replaced
+      // iframe documents to the service worker, so as a workaround if
+      // document.write() or document.open() replaced the document we create a
+      // blob URL from the buffer contents and navigate the iframe to it.
+      if (
+        isSWLoad() &&
+        (!wasLoading ||
+          wombat._docOpenReplacedDocument ||
+          nativeWriteReplacedDocument)
+      ) {
         wombat.blobUrlForIframe(
           wombat.$wbwindow.frameElement,
           wombat._writeBuff
@@ -5459,8 +5483,10 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
         }
       }
       wombat._writeBuff = '';
+      wombat._docOpenReplacedDocument = false;
       return;
     }
+    wombat._docOpenReplacedDocument = false;
     var thisObj = wombat.proxyToObj(this);
     wombat.initNewWindowWombat(thisObj.defaultView);
     if (originalClose.__WB_orig_apply) {
