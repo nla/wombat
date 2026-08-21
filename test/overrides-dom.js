@@ -330,9 +330,14 @@ test('document.write: should perform rewriting with multiple write calls, each i
 test('document.write: should insert at the parser position in SW mode', async t => {
   const result = await t.context.sandbox.evaluate(
     () =>
-      new Promise(resolve => {
+      new Promise((resolve, reject) => {
         const iframe = document.createElement('iframe');
+        const timeout = setTimeout(() => {
+          iframe.remove();
+          reject(new Error('document.write iframe timed out'));
+        }, 3000);
         iframe.onload = () => {
+          clearTimeout(timeout);
           resolve(iframe.contentDocument.body.innerText.replace(/\s/g, ''));
           iframe.remove();
         };

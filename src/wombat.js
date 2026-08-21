@@ -5434,6 +5434,14 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
   var originalClose = $wbDocument.close;
   var newClose = function close() {
     if (wombat._writeBuff) {
+      // Clear the global state before calling the native orig_doc_write because
+      // injectDocClose means that document.write('<script>...</script>')
+      // will call this function again before the first call returns.
+      const writeBuff = wombat._writeBuff;
+      const docOpenReplacedDocument = wombat._docOpenReplacedDocument;
+      wombat._writeBuff = '';
+      wombat._docOpenReplacedDocument = false;
+
       const wasLoading = this.readyState === 'loading';
       let nativeWriteReplacedDocument = false;
 
@@ -5442,7 +5450,7 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
         const oldDocumentElement = $wbDocument.documentElement;
         orig_doc_write.call(
           $wbDocument,
-          wombat.rewriteHtml(wombat._writeBuff, true)
+          wombat.rewriteHtml(writeBuff, true)
         );
         nativeWriteReplacedDocument =
           $wbDocument.documentElement !== oldDocumentElement;
@@ -5454,13 +5462,10 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       if (
         isSWLoad() &&
         (!wasLoading ||
-          wombat._docOpenReplacedDocument ||
+          docOpenReplacedDocument ||
           nativeWriteReplacedDocument)
       ) {
-        wombat.blobUrlForIframe(
-          wombat.$wbwindow.frameElement,
-          wombat._writeBuff
-        );
+        wombat.blobUrlForIframe(wombat.$wbwindow.frameElement, writeBuff);
 
         const doc = this;
 
@@ -5479,8 +5484,6 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
           // ignore
         }
       }
-      wombat._writeBuff = '';
-      wombat._docOpenReplacedDocument = false;
       return;
     }
     wombat._docOpenReplacedDocument = false;
