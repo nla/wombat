@@ -5411,15 +5411,13 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       res = orig_doc_open.call(thisObj, rwUrl, arguments[1], arguments[2]);
       wombat.initNewWindowWombat(res, arguments[0]);
     } else {
-      const oldDocumentElement = thisObj.documentElement;
       res = orig_doc_open.call(thisObj);
       if (isSWLoad()) {
         // Track whether the native call replaced the document so close() can
         // use the blob workaround.
-        wombat._docOpenReplacedDocument =
-          !oldDocumentElement || thisObj.documentElement !== oldDocumentElement;
-        if (wombat._docOpenReplacedDocument) {
+        if (!thisObj.documentElement) {
           wombat._writeBuff = '';
+          wombat._docOpenReplacedDocument = true;
         }
       } else {
         wombat.initNewWindowWombat(thisObj.defaultView);
@@ -5447,7 +5445,6 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
           wombat.rewriteHtml(wombat._writeBuff, true)
         );
         nativeWriteReplacedDocument =
-          oldDocumentElement !== null &&
           $wbDocument.documentElement !== oldDocumentElement;
       }
       // Chromium has an issue where it does not route requests from replaced
