@@ -5437,11 +5437,11 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       const writeBuff = wombat._writeBuff;
       wombat._writeBuff = '';
 
-      const wasLoading = this.readyState === 'loading';
       let nativeWriteReplacedDocument = false;
 
-      // if loading, apply as may be sync waiting for changes
-      if (wasLoading) {
+      // if loading, call write() immediately as not necessarily replacing the doc
+      // and may be waiting for results of write
+      if (this.readyState === 'loading') {
         const oldDocumentElement = $wbDocument.documentElement;
         orig_doc_write.call(
           $wbDocument,
@@ -5449,16 +5449,16 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
         );
         nativeWriteReplacedDocument =
           $wbDocument.documentElement !== oldDocumentElement;
+      } else {
+        // if write called outside of 'loading' state, document has already been replaced
+        nativeWriteReplacedDocument = true;
       }
+
       // Chromium has an issue where it does not route requests from replaced
       // iframe documents to the service worker, so as a workaround if
       // document.write() or document.open() replaced the document we create a
       // blob URL from the buffer contents and navigate the iframe to it.
-      if (
-        isSWLoad() &&
-        (!wasLoading ||
-          nativeWriteReplacedDocument)
-      ) {
+      if (isSWLoad() && nativeWriteReplacedDocument) {
         wombat.blobUrlForIframe(wombat.$wbwindow.frameElement, writeBuff);
 
         const doc = this;
