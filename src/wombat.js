@@ -5324,7 +5324,6 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
   var $wbDocument = this.$wbwindow.document;
 
   this._writeBuff = '';
-  this._docOpenReplacedDocument = false;
 
   var wombat = this;
 
@@ -5413,11 +5412,9 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
     } else {
       res = orig_doc_open.call(thisObj);
       if (isSWLoad()) {
-        // Track whether the native call replaced the document so close() can
-        // use the blob workaround.
+        // only clear writeBuff if open() cleared the document, eg. starting a new document
         if (!thisObj.documentElement) {
           wombat._writeBuff = '';
-          wombat._docOpenReplacedDocument = true;
         }
       } else {
         wombat.initNewWindowWombat(thisObj.defaultView);
@@ -5438,9 +5435,7 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       // injectDocClose means that document.write('<script>...</script>')
       // will call this function again before the first call returns.
       const writeBuff = wombat._writeBuff;
-      const docOpenReplacedDocument = wombat._docOpenReplacedDocument;
       wombat._writeBuff = '';
-      wombat._docOpenReplacedDocument = false;
 
       const wasLoading = this.readyState === 'loading';
       let nativeWriteReplacedDocument = false;
@@ -5462,7 +5457,6 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       if (
         isSWLoad() &&
         (!wasLoading ||
-          docOpenReplacedDocument ||
           nativeWriteReplacedDocument)
       ) {
         wombat.blobUrlForIframe(wombat.$wbwindow.frameElement, writeBuff);
@@ -5486,7 +5480,6 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       }
       return;
     }
-    wombat._docOpenReplacedDocument = false;
     var thisObj = wombat.proxyToObj(this);
     wombat.initNewWindowWombat(thisObj.defaultView);
     if (originalClose.__WB_orig_apply) {
