@@ -5430,6 +5430,7 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
   // https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#dom-document-close
   var originalClose = $wbDocument.close;
   var newClose = function close() {
+    var thisObj = wombat.proxyToObj(this);
     if (wombat._writeBuff) {
       // Clear the global state before calling the native orig_doc_write because
       // injectDocClose means that document.write('<script>...</script>')
@@ -5439,22 +5440,22 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
 
       let nativeWriteReplacedDocument = false;
 
-      // if loading, call write() immediately as not necessarily replacing the doc
-      // and may be waiting for results of write
-      if (this.readyState === 'loading') {
-        const oldDocumentElement = $wbDocument.documentElement;
-        orig_doc_write.call(
-          $wbDocument,
-          wombat.rewriteHtml(writeBuff, true)
-        );
-        nativeWriteReplacedDocument =
-          $wbDocument.documentElement !== oldDocumentElement;
-      } else {
-        // if write called outside of 'loading' state, document has already been replaced
-        nativeWriteReplacedDocument = true;
-      }
+      // possible options here are:
+      //
+      // 1) initial page load: oldDocumentElement is non-null, calling write doesn't change element
+      // 2) new document: doc.open(), doc.write() and then doc.close() called:
+      //    oldDocumentElement is null, replaced with new document
+      // 3) new document: doc.write() and doc.close() called without doc.open()
+      //    oldDocumentElement is non-null old doc, replaced with new document
 
-      // Chromium has an issue where it does not route requests from replaced
+      // First, always call native .write() and .close() as sync code may attempt to access
+      // then new document after .close()
+      const oldDocumentElement = thisObj.documentElement;
+      orig_doc_write.call(thisObj, wombat.rewriteHtml(writeBuff, true));
+      nativeWriteReplacedDocument =
+        thisObj.documentElement !== oldDocumentElement;
+
+      // Chromium and sometimes Firefox have an issue where it does not route requests from replaced
       // iframe documents to the service worker, so as a workaround if
       // document.write() or document.open() replaced the document we create a
       // blob URL from the buffer contents and navigate the iframe to it.
@@ -5480,7 +5481,6 @@ Wombat.prototype.initDocWriteOpenCloseOverride = function() {
       }
       return;
     }
-    var thisObj = wombat.proxyToObj(this);
     wombat.initNewWindowWombat(thisObj.defaultView);
     if (originalClose.__WB_orig_apply) {
       return originalClose.__WB_orig_apply(thisObj, arguments);
